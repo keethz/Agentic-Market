@@ -188,6 +188,8 @@ class NegotiationAgent:
     def __init__(self, me: PublicProfile, policy: PrivatePolicy, brain: Brain, transport: Optional[Transport] = None):
         self.me, self.policy, self.brain, self.t = me, policy, brain, transport
         self.log: List[str] = []
+        # Counts of outgoing proposals blocked by this agent's own guardrails.
+        self.stats = {"policy_blocks": 0, "leak_blocks": 0, "walk_aways": 0}
         if transport is not None:
             transport.subscribe(me.id, self.on_message)
 
@@ -209,17 +211,27 @@ class NegotiationAgent:
             p = self.brain.decide(incoming, feedback)
             problems = self._guard(p)
             if not problems:
-                return p
+                return self._stamp(p)
             self.log.append(f"blocked: {problems}")
             feedback = "; ".join(problems)
         # Could not produce a safe proposal: walk away rather than leak or breach.
-        return Proposal(type=ProposalType.walk_away, rationale="We are unable to continue.")
+        return self._stamp(Proposal(type=ProposalType.walk_away, rationale="We are unable to continue."))
+
+    def _stamp(self, p: Proposal) -> Proposal:
+        if p.type == ProposalType.walk_away:
+            self.stats["walk_aways"] += 1
+        p.meta = dict(self.stats)
+        return p
 
     def _guard(self, p: Proposal) -> List[str]:
         issues = []
         if p.terms is not None and p.type != ProposalType.walk_away:
-            issues += [f"own policy: {c}" for c in self_check(self.policy, p.terms)]
+            codes = self_check(self.policy, p.terms)
+            if codes:
+                self.stats["policy_blocks"] += 1
+            issues += [f"own policy: {c}" for c in codes]
         leaks = leak_findings(p.rationale, self.policy, p.terms)
         if leaks:
+            self.stats["leak_blocks"] += 1
             issues.append(f"rationale may reveal confidential info ({', '.join(leaks)}); use public reasons only")
         return issues

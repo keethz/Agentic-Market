@@ -20,6 +20,10 @@ def terms_line(t: dict) -> str:
 def render(payload: dict) -> str:
     kind = payload.get("kind") or payload.get("type")
     t = payload.get("terms")
+    if kind == "analytics":
+        from .analytics import report
+        head = f"📊 **Deal analytics** ({payload['negotiation_id']})\n{report(payload['metrics'])}"
+        return f"{head}\n```json\n{json.dumps(payload)}\n```"
     if kind == "status":
         head = f"📌 Status: **{payload['status']}** — {payload.get('reason', '')}"
     elif kind == "approval_request":

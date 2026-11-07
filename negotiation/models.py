@@ -90,6 +90,8 @@ class Proposal(BaseModel):
     type: ProposalType
     terms: Optional[Dict[str, TermValue]] = None
     rationale: str = ""
+    # Non-secret telemetry from the agent's own guardrails (cumulative counts only).
+    meta: Optional[Dict[str, int]] = None
 
 
 class Status(str, enum.Enum):

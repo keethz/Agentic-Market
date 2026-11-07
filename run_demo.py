@@ -10,6 +10,7 @@ import json
 
 from dotenv import load_dotenv
 
+from negotiation import analytics
 from negotiation.config import load_all
 from negotiation.leak_scan import scan
 from negotiation.models import Status
@@ -21,6 +22,8 @@ def show(m):
     who = f"{m.sender} -> {m.recipient or 'ROOM'}"
     if body.get("kind") == "status":
         print(f"  [status] {body['status']}  {body.get('reason', '')}")
+    elif body.get("kind") == "analytics":
+        print("  [analytics recorded]")
     elif "terms" in body and body.get("terms"):
         t = body["terms"]
         print(f"{who:28} {body.get('type', body.get('kind')):16} ${t['unit_price']}/seat x{t['quantity']} "
@@ -47,8 +50,12 @@ def main():
     leaks = scan(t.timeline, load_all())
     print("Leak scan:", "CLEAN - no secrets in room timeline" if not leaks else leaks)
 
+    def show_analytics():
+        print("\n=== Deal analytics ===\n" + analytics.report(coord.analytics))
+        print("\n=== Portfolio (all recorded deals) ===\n" + analytics.summary_report(analytics.summarize(coord.data_dir)))
+
     if coord.status != Status.pending_approval:
-        return
+        return show_analytics()
     c = coord.contract
     print(f"\nContract {c.contract_id}  total ${c.total_value:,.2f}  hash {c.terms_hash[:12]}")
     for a in list(c.approvals):
@@ -64,6 +71,7 @@ def main():
         else:
             coord.reject(a.company_id, a.role, a.role, input("  reason: "))
     print("Contract status:", coord.contract.status.value, f"-> data/contracts/{c.contract_id}.json")
+    show_analytics()
 
 
 if __name__ == "__main__":

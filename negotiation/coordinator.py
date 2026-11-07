@@ -13,6 +13,8 @@ from typing import Dict, List, Optional
 
 from pydantic import ValidationError
 
+from . import analytics
+
 from .models import (Approval, Contract, Proposal, ProposalType, PublicProfile, Status,
                      normalize_terms, now, total_value)
 from .policy_service import PolicyService, validate_schema
@@ -38,6 +40,8 @@ class Coordinator:
         self.pending_accept: Optional[dict] = None  # {"by": cid, "terms": {...}}
         self.contract: Optional[Contract] = None
         self.audit: List[dict] = []
+        self.agent_meta: Dict[str, Optional[dict]] = {a.id: None, b.id: None}
+        self.analytics: Optional[dict] = None
         self.data_dir = data_dir
         self.t.subscribe(COORDINATOR, self.on_message)
 
@@ -53,6 +57,19 @@ class Coordinator:
         self.status = s
         self._log("status", status=s.value, reason=reason)
         self.t.post(COORDINATOR, json.dumps({"kind": "status", "status": s.value, "round": self.round, "reason": reason}))
+        if s in (Status.pending_approval, Status.impasse, Status.finalized, Status.rejected):
+            self._publish_analytics()
+
+    def _publish_analytics(self):
+        """Compute, store and post deal metrics at the end of negotiation and again
+        when humans finalize or reject the contract."""
+        seller = next(c for c, p in self.parties.items() if p.role == "seller")
+        buyer = self.other[seller]
+        self.analytics = analytics.compute(self.audit, seller, buyer, self.agent_meta,
+                                           self.contract.terms if self.contract else None)
+        analytics.save(self.data_dir, self.negotiation_id, self.analytics)
+        self.t.post(COORDINATOR, json.dumps({"kind": "analytics", "negotiation_id": self.negotiation_id,
+                                             "metrics": self.analytics}))
 
     def _reply_error(self, to: str, codes: List[str]):
         self._log("rejected_message", sender=to, codes=codes)
@@ -79,6 +96,8 @@ class Coordinator:
             p = Proposal(**json.loads(m.content))
         except (ValueError, ValidationError):
             return self._reply_error(sender, ["INVALID_MESSAGE"])
+        if p.meta:
+            self.agent_meta[sender] = p.meta
 
         if p.type == ProposalType.walk_away:
             self._log("walk_away", sender=sender)

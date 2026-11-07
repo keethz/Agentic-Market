@@ -115,6 +115,11 @@ class CoordinatorAdapter(SimpleAdapter):
             self.rooms[room_id] = (coord, outbox, human)
             coord.start()
             return await self._flush(tools, outbox, human)
+        if not state and cmd == "analytics":
+            from . import analytics
+            from .coordinator import DATA
+            return await tools.send_message("📈 **Portfolio analytics (all deals)**\n" + analytics.summary_report(
+                analytics.summarize(self.data_dir or DATA)), mentions=[human])
         if not state:
             return await tools.send_message("Say `@Deal Coordinator start` to open a negotiation.", mentions=[human])
         coord, outbox, _ = state
@@ -128,7 +133,14 @@ class CoordinatorAdapter(SimpleAdapter):
             return await tools.send_message(f"Status: **{coord.status.value}**, round {coord.round}.{extra}", mentions=[human])
         if cmd in ("approve", "reject"):
             return await self._approvals(tools, coord, outbox, human, text)
-        return await tools.send_message("Commands: `start`, `status`, `approve <role>`, `reject <role> <reason>`.", mentions=[human])
+        if cmd == "analytics":
+            from . import analytics
+            from .coordinator import DATA
+            body = f"📈 **Portfolio analytics (all deals)**\n{analytics.summary_report(analytics.summarize(self.data_dir or DATA))}"
+            if coord.analytics:
+                body = f"📊 **This deal**\n{analytics.report(coord.analytics)}\n\n" + body
+            return await tools.send_message(body, mentions=[human])
+        return await tools.send_message("Commands: `start`, `status`, `analytics`, `approve <role>`, `reject <role> <reason>`.", mentions=[human])
 
 
 _CMD = re.compile(r"\b(approve|reject)\s+(.+?)(?=(?:@\S+\s+)?\b(?:approve|reject)\b|$)", re.I | re.S)

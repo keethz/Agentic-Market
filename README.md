@@ -44,6 +44,28 @@ Band shows humans in a room the full timeline, so **no secret ever goes into a m
   mentions secret numbers or words like "budget", "floor" or "walk-away". The agent then retries.
 - **Leak scan** (`negotiation/leak_scan.py`) checks the whole timeline for secrets after a run.
 
+## Negotiation analytics
+At the end of every deal (agreement or impasse), and again when humans finalize or reject it, the
+coordinator computes metrics, saves them to `data/analytics/<negotiation>.json` and posts them in
+the room.
+
+| Metric | Meaning |
+|---|---|
+| Rounds | Offers and counters exchanged |
+| Initial vs final price | Seller's opening, buyer's opening, and final price per seat |
+| Buyer savings | (seller's opening price − final price) × final seats × final term |
+| Seller discount | % off the seller's opening price |
+| Price split | Where the deal landed in the opening gap (0% = buyer's open, 100% = seller's) |
+| Time to agreement | Seconds from opening to identical acceptance |
+| Rejected offers | Offers the other side countered instead of accepting |
+| Policy violations | Proposals blocked by the coordinator (Policy Service) plus proposals blocked by each agent's own guardrails |
+| Secret-leak attempts | Outgoing messages blocked because they mentioned confidential information |
+| Walk-away rate | Share of negotiations ending with a walk-away (portfolio level) |
+
+Portfolio totals across all deals: `@Deal Coordinator analytics` in Band, or
+`.venv/bin/python -m negotiation.analytics` locally. Agents report only *counts* of blocked
+attempts, never what was blocked, so the analytics are safe to post publicly.
+
 ## Quick start
 
 Requires Python 3.11+.
@@ -76,6 +98,7 @@ cp -r configs/private.example configs/private        # each company's secret lim
 |---|---|
 | `@Deal Coordinator start` | Opens a negotiation (adds both company agents to the room) |
 | `@Deal Coordinator status` | Shows the deal status and who has approved |
+| `@Deal Coordinator analytics` | Shows this deal's metrics and portfolio totals |
 | `@Deal Coordinator approve <role>` | Approves as that role (several lines allowed in one message) |
 | `@Deal Coordinator reject <role> <reason>` | Rejects the contract |
 
@@ -88,7 +111,7 @@ Approver roles in the sample configs: `Sales Manager`, `VP Sales` (CloudCo) and
 ```
 The tests cover turn order, near-identical acceptances, two-sided confirmation, agents breaking
 their own limits, offers relayed without leaking limits, walk-away, approvals and rejections,
-guardrail leak detection, and a full negotiation through a simulated Band room.
+guardrail leak detection, analytics (violations, leaks, walk-aways, portfolio summary), and a full negotiation through a simulated Band room.
 
 ## Project layout
 | Path | Purpose |
@@ -102,8 +125,9 @@ guardrail leak detection, and a full negotiation through a simulated Band room.
 | `negotiation/band_runtime.py` | The three Band agents as custom adapters |
 | `negotiation/band_format.py` | Readable Band messages with an embedded JSON payload |
 | `negotiation/leak_scan.py` | Scans a timeline for leaked secrets |
+| `negotiation/analytics.py` | Per-deal metrics and portfolio aggregates |
 | `run_demo.py` / `run_band.py` | Local demo / live Band runtime |
-| `data/` | Audit log and contract records (gitignored) |
+| `data/` | Audit log, contract records and analytics (gitignored) |
 
 ## Configuration (`.env`)
 | Variable | Default | Purpose |
