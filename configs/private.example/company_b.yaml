@@ -1,0 +1,18 @@
+# PRIVATE — never put these values into BAND messages.
+company_id: company_b
+objectives:
+  - Minimise total cost
+  - Must have premium support for store rollout
+  - Prefer longer payment terms
+terms:
+  unit_price:        {min: 50,  max: 100,   target: 75}
+  quantity:          {min: 300, max: 600,   target: 450}
+  contract_months:   {min: 12,  max: 24,    target: 12}
+  payment_terms_days: {min: 30,  max: 90,    target: 60}
+  sla_uptime:        {min: 99.9, max: 99.99, target: 99.95}
+  support_tier:      {allowed: [premium]}
+non_negotiable:
+  support_tier: {allowed: [premium]}
+approval_rules:
+  - {role: Procurement Lead}
+  - {role: CFO, when: {field: total_value, op: ">", value: 35000}}

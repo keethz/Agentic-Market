@@ -1,0 +1,11 @@
+# Copy to agent_config.yaml (gitignored) and paste the ID + API key BAND shows
+# when you create each remote agent. One block per agent.
+company_a:
+  agent_id: "<CloudCo Sales agent ID>"
+  api_key: "<CloudCo Sales API key>"
+company_b:
+  agent_id: "<RetailCorp Procurement agent ID>"
+  api_key: "<RetailCorp Procurement API key>"
+coordinator:
+  agent_id: "<Deal Coordinator agent ID>"
+  api_key: "<Deal Coordinator API key>"
