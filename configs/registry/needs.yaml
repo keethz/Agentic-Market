@@ -1,0 +1,23 @@
+# Structured requirements published by buyer agents. Public: NO true budget here.
+# budget_band is a deliberately wide public range; the real maximum stays private.
+- need_id: need-retailcorp-analytics
+  buyer_id: company_b
+  buyer: RetailCorp
+  category: analytics
+  summary: Store and HQ analytics with per-store dashboards and demand forecasting.
+  industry: retail
+  company_size: enterprise
+  region: us
+  seats: {min: 300, max: 600}
+  must_have:
+    capabilities: [dashboards, store-level reporting]
+    integrations: [sap, sso-saml]
+    certifications: [soc2]
+    min_sla_uptime: 99.9
+  nice_to_have:
+    capabilities: [demand forecasting, real-time analytics, inventory optimization]
+    integrations: [snowflake]
+  budget_band: "under $150k/yr"
+  buying_intent: high        # low | medium | high
+  timeline: this quarter
+  status: open

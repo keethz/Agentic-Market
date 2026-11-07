@@ -1,0 +1,5 @@
+# PRIVATE outreach policy for the buyer agent. Copy to configs/consent/ (gitignored).
+min_match_score: 0.6          # auto-accept outreach at or above this score
+human_review_band: 0.45       # scores between this and min go to a human
+blocked_vendors: []
+max_conversations: 3          # concurrent negotiations per need

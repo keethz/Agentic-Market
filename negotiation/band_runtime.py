@@ -29,6 +29,9 @@ from .config import load_private, load_public
 from .coordinator import COORDINATOR, Coordinator
 from .models import Status
 from .policy_service import PolicyService
+from .matchmaker import opportunities_for, rank
+from .outreach import OutreachDesk
+from .registry import Registry
 from .system import BRAINS
 from .transport import Message, Transport
 
@@ -66,6 +69,9 @@ class CoordinatorAdapter(SimpleAdapter):
         self.max_rounds, self.data_dir = max_rounds, data_dir
         self.rooms: Dict[str, Tuple[Coordinator, _Outbox, str]] = {}  # room -> (coord, outbox, human)
         self.policy = PolicyService({c: load_private(c) for c in COMPANIES})  # stands in for policy_api
+        self.registry = Registry.load()
+        self.desk = OutreachDesk(self.registry)
+        self.default_need = "need-retailcorp-analytics"
 
     async def _flush(self, tools, outbox: _Outbox, human: str):
         items, outbox.items = outbox.items, []
@@ -106,7 +112,19 @@ class CoordinatorAdapter(SimpleAdapter):
         human = msg.sender_name or "there"
         cmd, _, rest = text.partition(" ")
         cmd = cmd.lower()
+        if cmd in ("needs", "matches", "opportunities", "outreach", "consent"):
+            return await tools.send_message(self._marketplace(cmd, rest.strip(), human), mentions=[human])
         if cmd == "start":
+            if not self.desk.has_consent("company_a", self.default_need):
+                try:
+                    r = self.desk.request("company_a", self.default_need, "CloudCo requests to negotiate")
+                except ValueError as e:
+                    return await tools.send_message(f"Can't open: {e}", mentions=[human])
+                await tools.send_message(self.desk.public_view(r), mentions=[human])
+                if r.decision != "accepted":
+                    return await tools.send_message("No negotiation without buyer consent."
+                                                    + (f" Buyer reviewer: `@Deal Coordinator consent {r.request_id} yes|no`"
+                                                       if r.decision == "needs_human" else ""), mentions=[human])
             await self._ensure_participants(tools)
             pub = [load_public(c) for c in COMPANIES]
             outbox = _Outbox()
@@ -140,7 +158,44 @@ class CoordinatorAdapter(SimpleAdapter):
             if coord.analytics:
                 body = f"📊 **This deal**\n{analytics.report(coord.analytics)}\n\n" + body
             return await tools.send_message(body, mentions=[human])
-        return await tools.send_message("Commands: `start`, `status`, `analytics`, `approve <role>`, `reject <role> <reason>`.", mentions=[human])
+        return await tools.send_message("Commands: `needs`, `matches`, `opportunities`, `outreach <vendor>`, `consent <id> yes|no`, `start`, `status`, `analytics`, `approve <role>`, `reject <role> <reason>`.", mentions=[human])
+
+    def _vendor(self, text: str):
+        t = text.lower()
+        return next((v.vendor_id for v in self.registry.vendors.values()
+                     if t in (v.vendor_id.lower(), v.name.lower()) or v.name.lower().startswith(t)), None) if t else None
+
+    def _marketplace(self, cmd: str, arg: str, human: str) -> str:
+        reg, need = self.registry, arg if arg in self.registry.needs else self.default_need
+        if cmd == "needs":
+            return "📋 **Open buyer needs** (public; true budgets stay private)\n" + "\n".join(
+                f"- `{n.need_id}` {n.buyer}: {n.summary} | must: {', '.join(n.must_have.capabilities + n.must_have.integrations)}"
+                f" | {n.seats.get('min')}–{n.seats.get('max')} seats | budget band {n.budget_band} | intent {n.buying_intent}"
+                for n in reg.open_needs())
+        if cmd == "matches":
+            return f"🔎 **Ranked vendors for `{need}`**\n" + "\n\n".join(
+                m.explain() for m in rank(reg, need, include_ineligible=True))
+        if cmd == "opportunities":
+            vid = self._vendor(arg) or "company_a"
+            ms = opportunities_for(reg, vid)
+            return f"🎯 **Opportunities for {reg.vendors[vid].name}**\n" + ("\n\n".join(m.explain() for m in ms) or "none")
+        if cmd == "outreach":
+            vid = self._vendor(arg.split()[0] if arg else "")
+            if not vid:
+                return "Usage: `outreach <vendor>` e.g. `outreach CloudCo`."
+            try:
+                return self.desk.public_view(self.desk.request(vid, self.default_need, f"requested by {human}"))
+            except ValueError as e:
+                return f"Outreach refused: {e}"
+        if cmd == "consent":
+            parts = arg.split()
+            if len(parts) < 2 or parts[0] not in self.desk.requests:
+                return "Usage: `consent <request_id> yes|no`."
+            try:
+                return self.desk.public_view(self.desk.decide(parts[0], parts[1].lower() in ("yes", "y", "accept"), human))
+            except ValueError as e:
+                return str(e)
+        return ""
 
 
 _CMD = re.compile(r"\b(approve|reject)\s+(.+?)(?=(?:@\S+\s+)?\b(?:approve|reject)\b|$)", re.I | re.S)

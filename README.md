@@ -44,6 +44,32 @@ Band shows humans in a room the full timeline, so **no secret ever goes into a m
   mentions secret numbers or words like "budget", "floor" or "walk-away". The agent then retries.
 - **Leak scan** (`negotiation/leak_scan.py`) checks the whole timeline for secrets after a run.
 
+## Marketplace: registry, matchmaking and consent
+Sales agents don't message every buyer. Instead:
+1. **Registry** (`configs/registry/`). Sellers publish product listings: capabilities, integrations,
+   industries, company sizes, regions, certifications, SLA and deal history. Buyers publish structured
+   needs: must-haves, nice-to-haves, seats, intent, timeline and a deliberately wide **public budget band**.
+   Buyers never publish their true maximum budget; it stays in `configs/private/`.
+2. **Matchmaker** (`negotiation/matchmaker.py`). It filters first on category, region, required
+   capabilities, integrations, certifications and minimum SLA. It then scores the vendors that pass on
+   capability and integration coverage, semantic fit, industry, company size, geography, buying intent
+   and past deal performance. Semantic fit uses offline word overlap by default, or Gemini embeddings
+   with `MATCH_SEMANTIC=gemini`. Every match lists **why** it was recommended (✓) and what is missing (✗).
+3. **Consent before outreach** (`negotiation/outreach.py`). A seller can only send an outreach request
+   when it is eligible for the need. It cannot send duplicates and is limited to 3 pending requests.
+   The buyer agent then applies its **private** consent policy (`configs/consent/`): accept automatically
+   above a score, send borderline matches to a human, decline blocked vendors or when too many
+   conversations are open. Room messages give no policy details. The coordinator won't `start` a
+   negotiation until the buyer has accepted.
+
+| Command | What it does |
+|---|---|
+| `@Deal Coordinator needs` | Lists open buyer needs (public fields only) |
+| `@Deal Coordinator matches` | Lists ranked vendors for the need, with explanations |
+| `@Deal Coordinator opportunities CloudCo` | Shows needs that a seller is eligible for |
+| `@Deal Coordinator outreach <vendor>` | Seller asks for consent to negotiate |
+| `@Deal Coordinator consent <id> yes\|no` | Buyer's human decision on a borderline request |
+
 ## Negotiation analytics
 At the end of every deal (agreement or impasse), and again when humans finalize or reject it, the
 coordinator computes metrics, saves them to `data/analytics/<negotiation>.json` and posts them in
@@ -125,6 +151,7 @@ guardrail leak detection, analytics (violations, leaks, walk-aways, portfolio su
 | `negotiation/band_runtime.py` | The three Band agents as custom adapters |
 | `negotiation/band_format.py` | Readable Band messages with an embedded JSON payload |
 | `negotiation/leak_scan.py` | Scans a timeline for leaked secrets |
+| `negotiation/registry.py`, `matchmaker.py`, `outreach.py` | Registry, ranked matching with explanations, consent-gated outreach |
 | `negotiation/analytics.py` | Per-deal metrics and portfolio aggregates |
 | `run_demo.py` / `run_band.py` | Local demo / live Band runtime |
 | `data/` | Audit log, contract records and analytics (gitignored) |
@@ -136,4 +163,5 @@ guardrail leak detection, analytics (violations, leaks, walk-aways, portfolio su
 | `GEMINI_MODEL` | `gemini-3.8-flash` | Falls back to other free Flash models when busy |
 | `AGENT_BRAIN` | `gemini` | `gemini`, `claude` or `scripted` |
 | `ANTHROPIC_API_KEY`, `AGENT_MODEL` | none, `claude-opus-5-5` | For `--brain claude` |
+| `MATCH_SEMANTIC` | offline | `gemini` to use Gemini embeddings for matching |
 | `POLICY_API_KEY` | none | Protects `policy_api.py` |

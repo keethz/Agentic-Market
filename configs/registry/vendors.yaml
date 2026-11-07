@@ -1,0 +1,57 @@
+# Public product listings published by seller agents. Safe to show in any room.
+- vendor_id: company_a
+  name: CloudCo
+  product: CloudCo Analytics Enterprise
+  category: analytics
+  capabilities: [dashboards, self-service BI, store-level reporting, demand forecasting, real-time analytics, role-based access]
+  integrations: [snowflake, sap, shopify, salesforce, sso-saml]
+  industries: [retail, ecommerce, cpg]
+  company_sizes: [mid-market, enterprise]
+  regions: [us, eu]
+  certifications: [soc2, gdpr, iso27001]
+  sla_uptime: 99.95
+  deployment: [cloud]
+  description: Enterprise analytics platform with per-store dashboards and forecasting for retail chains.
+  history: {deals_closed: 42, win_rate: 0.38, avg_rounds: 7}
+- vendor_id: vendor_insightly
+  name: Insightly BI
+  product: Insightly Dashboards
+  category: analytics
+  capabilities: [dashboards, self-service BI, embedded analytics]
+  integrations: [bigquery, salesforce, sso-saml]
+  industries: [saas, fintech]
+  company_sizes: [smb, mid-market]
+  regions: [us]
+  certifications: [soc2]
+  sla_uptime: 99.9
+  deployment: [cloud]
+  description: Lightweight dashboards for SaaS teams.
+  history: {deals_closed: 120, win_rate: 0.52, avg_rounds: 4}
+- vendor_id: vendor_retailiq
+  name: RetailIQ
+  product: RetailIQ Store Analytics
+  category: analytics
+  capabilities: [store-level reporting, demand forecasting, inventory optimization, dashboards]
+  integrations: [sap, oracle-retail, sso-saml]
+  industries: [retail, grocery]
+  company_sizes: [enterprise]
+  regions: [us, eu, apac]
+  certifications: [soc2, iso27001]
+  sla_uptime: 99.9
+  deployment: [cloud, on-prem]
+  description: Retail-specific analytics focused on stores, stock and forecasting.
+  history: {deals_closed: 18, win_rate: 0.30, avg_rounds: 10}
+- vendor_id: vendor_shipfast
+  name: ShipFast
+  product: ShipFast Logistics Suite
+  category: logistics
+  capabilities: [route optimization, fleet tracking, warehouse management]
+  integrations: [sap, shopify]
+  industries: [retail, logistics]
+  company_sizes: [mid-market, enterprise]
+  regions: [us]
+  certifications: [soc2]
+  sla_uptime: 99.5
+  deployment: [cloud]
+  description: Logistics and warehouse software.
+  history: {deals_closed: 60, win_rate: 0.45, avg_rounds: 5}
