@@ -3,6 +3,8 @@
 Two AI agents negotiate a B2B SaaS deal for their companies. A neutral **Deal Coordinator**
 enforces the rules, and **humans approve** the deal before it becomes binding. Everything runs
 live in a [Band](https://band.ai) room.
+
+
 Product pitch : https://drive.google.com/file/d/1QD-Stp3ILlxCC6_Jm3eigqFS7QKFxdLB/view?usp=sharing 
 | Agent | Represents | Goal |
 |---|---|---|
