@@ -156,6 +156,15 @@ cp -r configs/private.example configs/private        # each company's secret lim
 Approver roles in the sample configs: `Sales Manager`, `VP Sales` (CloudCo) and
 `Procurement Lead`, `CFO` (RetailCorp).
 
+### Dashboard
+```bash
+.venv/bin/python dashboard.py          # http://localhost:8050
+```
+A read-only page that refreshes every 5 seconds. It shows totals (negotiations, deals closed, agreement
+rate, average time to agreement and to close, closed value), a per-seller-agent table, time-to-agreement
+bars, and every negotiation with a link to its contract PDF. It reads only `data/` and shows no
+private limits.
+
 ### Tests
 ```bash
 .venv/bin/python -m pytest -q
@@ -180,6 +189,7 @@ guardrail leak detection, analytics (violations, leaks, walk-aways, portfolio su
 | `negotiation/fallback.py` | Next-vendor fallback after an impasse, through consent |
 | `negotiation/contract_pdf.py` | Renders finalized contracts to PDF |
 | `negotiation/analytics.py` | Per-deal metrics and portfolio aggregates |
+| `dashboard.py`, `dashboard.html`, `negotiation/dashboard_data.py` | Read-only negotiations dashboard |
 | `run_demo.py` / `run_band.py` | Local demo / live Band runtime |
 | `data/` | Audit log, contract records and analytics (gitignored) |
 
