@@ -1,4 +1,4 @@
-# Agentic Sales: agent-to-agent B2B negotiation on Band
+# Agentic Market: Autonomous B2B Discovery and Negotiation
 
 Two AI agents negotiate a B2B SaaS deal for their companies. A neutral **Deal Coordinator**
 enforces the rules, and **humans approve** the deal before it becomes binding. Everything runs
