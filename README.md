@@ -29,6 +29,14 @@ live in a [Band](https://band.ai) room.
 4. **Every required human approver approves.** Approvers depend on deal size (e.g. CFO above $35k).
    One rejection stops the deal.
 
+### Contract PDF
+When **every** required approver has approved, the coordinator renders the final contract to
+`data/contracts/<contract_id>.pdf`. The PDF shows the parties, the agreed terms with the total value,
+the conditions, each approver with their decision and timestamp, and the terms' SHA-256 hash. In Band
+the PDF is uploaded to the room automatically; `@Deal Coordinator contract` sends it again. No PDF is
+made for rejected or partly approved contracts, and it never contains private limits. See
+[samples/sample_contract.pdf](samples/sample_contract.pdf).
+
 Only the coordinator can relay messages between companies, change status, declare agreement,
 request approval, or create the contract.
 
@@ -123,6 +131,7 @@ cp -r configs/private.example configs/private        # each company's secret lim
 | Command | What it does |
 |---|---|
 | `@Deal Coordinator start` | Opens a negotiation (adds both company agents to the room) |
+| `@Deal Coordinator contract` | Re-sends the finalized contract PDF |
 | `@Deal Coordinator status` | Shows the deal status and who has approved |
 | `@Deal Coordinator analytics` | Shows this deal's metrics and portfolio totals |
 | `@Deal Coordinator approve <role>` | Approves as that role (several lines allowed in one message) |
@@ -152,6 +161,7 @@ guardrail leak detection, analytics (violations, leaks, walk-aways, portfolio su
 | `negotiation/band_format.py` | Readable Band messages with an embedded JSON payload |
 | `negotiation/leak_scan.py` | Scans a timeline for leaked secrets |
 | `negotiation/registry.py`, `matchmaker.py`, `outreach.py` | Registry, ranked matching with explanations, consent-gated outreach |
+| `negotiation/contract_pdf.py` | Renders finalized contracts to PDF |
 | `negotiation/analytics.py` | Per-deal metrics and portfolio aggregates |
 | `run_demo.py` / `run_band.py` | Local demo / live Band runtime |
 | `data/` | Audit log, contract records and analytics (gitignored) |

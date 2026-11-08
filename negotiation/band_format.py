@@ -32,6 +32,8 @@ def render(payload: dict) -> str:
                 f"Constraints satisfied: yes · Hash `{payload['terms_hash'][:12]}`\n"
                 f"Required approvers: {roles}\n"
                 f"Reply `@Deal Coordinator approve <role>` or `@Deal Coordinator reject <role> <reason>`.")
+    elif kind == "contract_pdf":
+        head = f"📄 Contract PDF generated: {payload['path']}"
     elif kind == "error":
         head = f"⚠️ Rejected: {', '.join(payload['codes'])}"
     elif kind == "start":

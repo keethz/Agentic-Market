@@ -26,7 +26,7 @@ def secret_numbers(policy: PrivatePolicy) -> List[float]:
 
 def _numbers_in(text: str) -> List[float]:
     out = []
-    for raw in re.findall(r"\d[\d,]*\.?\d*", text):
+    for raw in re.findall(r"(?<![A-Za-z0-9_-])\d[\d,]*\.?\d*(?![A-Za-z_-]*[A-Za-z])", text):
         try:
             out.append(float(raw.replace(",", "").rstrip(".")))
         except ValueError:

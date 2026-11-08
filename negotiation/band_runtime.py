@@ -77,6 +77,9 @@ class CoordinatorAdapter(SimpleAdapter):
         items, outbox.items = outbox.items, []
         for recipient, content in items:
             payload = json.loads(content)
+            if payload.get("kind") == "contract_pdf":
+                await _send_pdf(tools, payload, human)
+                continue
             to = BAND_NAMES[recipient] if recipient else human
             await tools.send_message(render(payload), mentions=[to])
 
@@ -141,6 +144,10 @@ class CoordinatorAdapter(SimpleAdapter):
         if not state:
             return await tools.send_message("Say `@Deal Coordinator start` to open a negotiation.", mentions=[human])
         coord, outbox, _ = state
+        if cmd == "contract":
+            if not coord.contract_pdf:
+                return await tools.send_message("The PDF is generated once the contract is FINALIZED by all approvers.", mentions=[human])
+            return await _send_pdf(tools, {"contract_id": coord.contract.contract_id, "path": str(coord.contract_pdf)}, human)
         if cmd == "status":
             c = coord.contract
             extra = ""
@@ -158,7 +165,7 @@ class CoordinatorAdapter(SimpleAdapter):
             if coord.analytics:
                 body = f"📊 **This deal**\n{analytics.report(coord.analytics)}\n\n" + body
             return await tools.send_message(body, mentions=[human])
-        return await tools.send_message("Commands: `needs`, `matches`, `opportunities`, `outreach <vendor>`, `consent <id> yes|no`, `start`, `status`, `analytics`, `approve <role>`, `reject <role> <reason>`.", mentions=[human])
+        return await tools.send_message("Commands: `needs`, `matches`, `opportunities`, `outreach <vendor>`, `consent <id> yes|no`, `start`, `status`, `contract`, `analytics`, `approve <role>`, `reject <role> <reason>`.", mentions=[human])
 
     def _vendor(self, text: str):
         t = text.lower()
@@ -223,14 +230,37 @@ async def _approvals(self, tools, coord, outbox, human, text):
     pending = [a.role for a in coord.contract.approvals if a.decision is None]
     if coord.status == Status.pending_approval:
         lines.append(f"Still pending: {', '.join(pending)}")
-    outbox.items = [i for i in outbox.items if json.loads(i[1]).get("kind") != "status"]  # summarised below
+    outbox.items = [i for i in outbox.items
+                    if json.loads(i[1]).get("kind") not in ("status", "contract_pdf")]  # summarised below
     await tools.send_message("\n".join(lines) or "No approve/reject command found.", mentions=[human])
     if coord.status == Status.finalized:
         c = coord.contract
         await tools.send_message(f"🏁 Contract **{c.contract_id}** is FINALIZED and recorded "
                                  f"(hash `{c.terms_hash[:12]}`, total ${c.total_value:,.0f}).", mentions=[human])
+        if coord.contract_pdf:
+            await _send_pdf(tools, {"contract_id": c.contract_id, "path": str(coord.contract_pdf)}, human)
     elif coord.status == Status.rejected:
         await tools.send_message("❌ Contract rejected. Say `@Deal Coordinator start` to renegotiate.", mentions=[human])
+    await self._flush(tools, outbox, human)  # analytics
+
+
+async def _send_pdf(tools, payload, human):
+    """Upload the contract PDF into the room; fall back to a text notice."""
+    import hashlib
+    from pathlib import Path
+    path = Path(payload["path"])
+    caption = f"📄 Signed-off contract **{payload['contract_id']}** (PDF)"
+    try:
+        body = path.read_bytes()
+        up = await tools.rest.agent_api_files.upload_agent_chat_file(
+            chat_id=tools.room_id, request=body,
+            request_options={"additional_headers": {"x-file-name": path.name,
+                                                    "x-file-sha256": hashlib.sha256(body).hexdigest(),
+                                                    "content-type": "application/pdf"}})
+        return await tools.send_message(caption, mentions=[human], attachment_ids=[up.data.id])
+    except Exception as e:
+        log.warning("PDF upload failed: %s", e)
+        return await tools.send_message(f"{caption} saved at `data/contracts/{path.name}`.", mentions=[human])
 
 
 CoordinatorAdapter._approvals = _approvals

@@ -42,6 +42,7 @@ class Coordinator:
         self.audit: List[dict] = []
         self.agent_meta: Dict[str, Optional[dict]] = {a.id: None, b.id: None}
         self.analytics: Optional[dict] = None
+        self.contract_pdf: Optional[Path] = None
         self.data_dir = data_dir
         self.t.subscribe(COORDINATOR, self.on_message)
 
@@ -197,6 +198,16 @@ class Coordinator:
             self.contract.status = Status.finalized
             self._set_status(Status.finalized, "all approvals received")
         self._save_contract()
+        if self.contract.status == Status.finalized:
+            self._make_pdf()
+
+    def _make_pdf(self):
+        from .contract_pdf import render
+        roles = {c: p.role.title() for c, p in self.parties.items()}
+        self.contract_pdf = render(self.contract, roles, self.data_dir / "contracts")
+        self._log("contract_pdf", contract_id=self.contract.contract_id, path=str(self.contract_pdf))
+        self.t.post(COORDINATOR, json.dumps({"kind": "contract_pdf", "contract_id": self.contract.contract_id,
+                                             "path": str(self.contract_pdf)}))
 
     def approve(self, company_id: str, role: str, approver: str, comment: str = ""):
         self._decide(company_id, role, approver, "approved", comment)

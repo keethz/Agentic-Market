@@ -42,7 +42,7 @@ class Room:
 
         class T:
             participants = [{"name": n} for n in room.adapters]
-            async def send_message(self, content, mentions=None):
+            async def send_message(self, content, mentions=None, attachment_ids=None):
                 room.timeline.append((me, mentions, content))
                 for m in mentions or []:
                     room.queue.append((m, Msg(content, me, "Agent")))
