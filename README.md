@@ -78,6 +78,21 @@ Sales agents don't message every buyer. Instead:
 | `@Deal Coordinator outreach <vendor>` | Seller asks for consent to negotiate |
 | `@Deal Coordinator consent <id> yes\|no` | Buyer's human decision on a borderline request |
 
+## Vendor fallback
+If a negotiation ends in **IMPASSE** (round limit, an agent walks away, or the buyer's human sends
+`walkaway`), the coordinator moves on to the **next-ranked eligible vendor** for the same need:
+1. It skips vendors already tried and vendors with no connected negotiating agent.
+2. It asks the buyer for consent again. An automatic decline skips the vendor; a borderline
+   score pauses until `@Deal Coordinator consent <id> yes|no`.
+3. It adds the new seller to the room and opens a fresh negotiation, with its own contract,
+   approvals, PDF and analytics.
+4. When no vendors are left, it says so and the need stays open.
+
+The sample registry ranks CloudCo first and RetailIQ second. RetailIQ has its own private limits
+(`configs/private.example/vendor_retailiq.yaml`) and approvers (Account Executive, plus Sales Director
+above $50k). To enable it in Band, register a remote agent named **RetailIQ Sales** and add its
+credentials under `vendor_retailiq:` in `agent_config.yaml`. Locally: `.venv/bin/python run_demo.py --fallback`.
+
 ## Negotiation analytics
 At the end of every deal (agreement or impasse), and again when humans finalize or reject it, the
 coordinator computes metrics, saves them to `data/analytics/<negotiation>.json` and posts them in
@@ -131,6 +146,7 @@ cp -r configs/private.example configs/private        # each company's secret lim
 | Command | What it does |
 |---|---|
 | `@Deal Coordinator start` | Opens a negotiation (adds both company agents to the room) |
+| `@Deal Coordinator walkaway [reason]` | Buyer ends the current negotiation; triggers vendor fallback |
 | `@Deal Coordinator contract` | Re-sends the finalized contract PDF |
 | `@Deal Coordinator status` | Shows the deal status and who has approved |
 | `@Deal Coordinator analytics` | Shows this deal's metrics and portfolio totals |
@@ -161,6 +177,7 @@ guardrail leak detection, analytics (violations, leaks, walk-aways, portfolio su
 | `negotiation/band_format.py` | Readable Band messages with an embedded JSON payload |
 | `negotiation/leak_scan.py` | Scans a timeline for leaked secrets |
 | `negotiation/registry.py`, `matchmaker.py`, `outreach.py` | Registry, ranked matching with explanations, consent-gated outreach |
+| `negotiation/fallback.py` | Next-vendor fallback after an impasse, through consent |
 | `negotiation/contract_pdf.py` | Renders finalized contracts to PDF |
 | `negotiation/analytics.py` | Per-deal metrics and portfolio aggregates |
 | `run_demo.py` / `run_band.py` | Local demo / live Band runtime |

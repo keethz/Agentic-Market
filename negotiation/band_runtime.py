@@ -25,7 +25,8 @@ from band.runtime.formatters import strip_leading_mentions
 
 from .agent import NegotiationAgent
 from .band_format import parse, render
-from .config import load_private, load_public
+from .config import CONFIG, has_agent, load_private, load_public
+from .fallback import next_vendor
 from .coordinator import COORDINATOR, Coordinator
 from .models import Status
 from .policy_service import PolicyService
@@ -37,9 +38,11 @@ from .transport import Message, Transport
 
 log = logging.getLogger("negotiation.band")
 
-COMPANIES = ("company_a", "company_b")
+BUYER = "company_b"
+SELLERS = ("company_a", "vendor_retailiq")
+COMPANIES = SELLERS + (BUYER,)
 BAND_NAMES = {"company_a": "CloudCo Sales", "company_b": "RetailCorp Procurement",
-              "coordinator": "Deal Coordinator"}
+              "vendor_retailiq": "RetailIQ Sales", "coordinator": "Deal Coordinator"}
 NAME_TO_ID = {v: k for k, v in BAND_NAMES.items()}
 
 
@@ -64,11 +67,15 @@ def _sender_id(msg) -> Optional[str]:
 
 
 class CoordinatorAdapter(SimpleAdapter):
-    def __init__(self, max_rounds: int = 16, data_dir=None):
+    def __init__(self, max_rounds: int = 16, data_dir=None, sellers_online=None):
         super().__init__()
         self.max_rounds, self.data_dir = max_rounds, data_dir
         self.rooms: Dict[str, Tuple[Coordinator, _Outbox, str]] = {}  # room -> (coord, outbox, human)
-        self.policy = PolicyService({c: load_private(c) for c in COMPANIES})  # stands in for policy_api
+        self.tried: Dict[str, List[str]] = {}      # room -> vendors already negotiated with
+        self.waiting: Dict[str, str] = {}          # room -> outreach request awaiting human consent
+        self.handled_impasse: Dict[str, str] = {}  # room -> negotiation_id already fallen back from
+        self.sellers_online = set(sellers_online) if sellers_online is not None else _configured_agents()
+        self.policy = PolicyService({c: load_private(c) for c in COMPANIES if has_agent(c)})  # stands in for policy_api
         self.registry = Registry.load()
         self.desk = OutreachDesk(self.registry)
         self.default_need = "need-retailcorp-analytics"
@@ -83,9 +90,9 @@ class CoordinatorAdapter(SimpleAdapter):
             to = BAND_NAMES[recipient] if recipient else human
             await tools.send_message(render(payload), mentions=[to])
 
-    async def _ensure_participants(self, tools):
+    async def _ensure_participants(self, tools, ids=(SELLERS[0], BUYER)):
         present = {p.get("name") for p in tools.participants} if tools.participants else set()
-        for cid in COMPANIES:
+        for cid in ids:
             if BAND_NAMES[cid] not in present:
                 try:
                     await tools.add_participant(BAND_NAMES[cid])
@@ -106,7 +113,8 @@ class CoordinatorAdapter(SimpleAdapter):
             coord, outbox, human = state
             coord.on_message(Message(sender=sender, recipient=COORDINATOR,
                                      content=json.dumps(parse(text) or {}), at=""))
-            return await self._flush(tools, outbox, human)
+            await self._flush(tools, outbox, human)
+            return await self._maybe_fallback(tools, room_id, human)
 
         if msg.sender_type == "Agent":
             return await tools.no_reply("ignoring unknown agent")
@@ -116,26 +124,28 @@ class CoordinatorAdapter(SimpleAdapter):
         cmd, _, rest = text.partition(" ")
         cmd = cmd.lower()
         if cmd in ("needs", "matches", "opportunities", "outreach", "consent"):
-            return await tools.send_message(self._marketplace(cmd, rest.strip(), human), mentions=[human])
+            await tools.send_message(self._marketplace(cmd, rest.strip(), human), mentions=[human])
+            req_id = rest.split()[0] if rest.split() else None
+            if cmd == "consent" and req_id and self.waiting.get(room_id) == req_id:
+                r = self.desk.requests[self.waiting.pop(room_id)]
+                if r.decision == "accepted":
+                    return await self._open(tools, room_id, human, r.vendor_id)
+                return await self._fallback(tools, room_id, human)
+            return
         if cmd == "start":
-            if not self.desk.has_consent("company_a", self.default_need):
-                try:
-                    r = self.desk.request("company_a", self.default_need, "CloudCo requests to negotiate")
-                except ValueError as e:
-                    return await tools.send_message(f"Can't open: {e}", mentions=[human])
-                await tools.send_message(self.desk.public_view(r), mentions=[human])
-                if r.decision != "accepted":
-                    return await tools.send_message("No negotiation without buyer consent."
-                                                    + (f" Buyer reviewer: `@Deal Coordinator consent {r.request_id} yes|no`"
-                                                       if r.decision == "needs_human" else ""), mentions=[human])
-            await self._ensure_participants(tools)
-            pub = [load_public(c) for c in COMPANIES]
-            outbox = _Outbox()
-            coord = Coordinator(outbox, self.policy, pub[0], pub[1], max_rounds=self.max_rounds,
-                                **({"data_dir": self.data_dir} if self.data_dir else {}))
-            self.rooms[room_id] = (coord, outbox, human)
-            coord.start()
-            return await self._flush(tools, outbox, human)
+            if state and state[0].status in (Status.negotiating, Status.pending_approval):
+                return await tools.send_message(f"A negotiation is already {state[0].status.value}.", mentions=[human])
+            self.tried[room_id] = []
+            self.waiting.pop(room_id, None)
+            return await self._next(tools, room_id, human, first=True)
+        if cmd in ("walkaway", "walk-away", "end"):
+            if not state or state[0].status != Status.negotiating:
+                return await tools.send_message("No negotiation is open.", mentions=[human])
+            coord, outbox, _ = state
+            buyer_name = coord.parties[BUYER].name
+            coord.end(BUYER, f"{buyer_name} ({human}) walked away" + (f": {rest.strip()}" if rest.strip() else ""))
+            await self._flush(tools, outbox, human)
+            return await self._maybe_fallback(tools, room_id, human)
         if not state and cmd == "analytics":
             from . import analytics
             from .coordinator import DATA
@@ -165,7 +175,50 @@ class CoordinatorAdapter(SimpleAdapter):
             if coord.analytics:
                 body = f"📊 **This deal**\n{analytics.report(coord.analytics)}\n\n" + body
             return await tools.send_message(body, mentions=[human])
-        return await tools.send_message("Commands: `needs`, `matches`, `opportunities`, `outreach <vendor>`, `consent <id> yes|no`, `start`, `status`, `contract`, `analytics`, `approve <role>`, `reject <role> <reason>`.", mentions=[human])
+        return await tools.send_message("Commands: `needs`, `matches`, `opportunities`, `outreach <vendor>`, `consent <id> yes|no`, `start`, `walkaway [reason]`, `status`, `contract`, `analytics`, `approve <role>`, `reject <role> <reason>`.", mentions=[human])
+
+    # ---------- vendor fallback ----------
+    async def _open(self, tools, room_id, human, vendor_id):
+        """Open a negotiation between the buyer and vendor_id (consent already granted)."""
+        self.tried.setdefault(room_id, []).append(vendor_id)
+        await self._ensure_participants(tools, (vendor_id, BUYER))
+        outbox = _Outbox()
+        coord = Coordinator(outbox, self.policy, load_public(vendor_id), load_public(BUYER),
+                            max_rounds=self.max_rounds, **({"data_dir": self.data_dir} if self.data_dir else {}))
+        self.rooms[room_id] = (coord, outbox, human)
+        coord.start()
+        await self._flush(tools, outbox, human)
+
+    async def _next(self, tools, room_id, human, first=False):
+        step = next_vendor(self.registry, self.desk, self.default_need, self.tried.get(room_id, []),
+                           available=lambda v: v in self.sellers_online and has_agent(v))
+        if step.notes:
+            await tools.send_message("\n".join(step.notes), mentions=[human])
+        if step.vendor_id:
+            if not first:
+                await tools.send_message(f"🔁 Falling back to **{self.registry.vendors[step.vendor_id].name}**, "
+                                         "the next-ranked vendor with buyer consent.", mentions=[human])
+            return await self._open(tools, room_id, human, step.vendor_id)
+        if step.waiting:
+            self.waiting[room_id] = step.waiting.request_id
+            return await tools.send_message(
+                f"⏸ Waiting for the buyer to review outreach from {self.registry.vendors[step.waiting.vendor_id].name}: "
+                f"`@Deal Coordinator consent {step.waiting.request_id} yes|no`", mentions=[human])
+        tried = ", ".join(self.registry.vendors[v].name for v in self.tried.get(room_id, [])) or "none"
+        return await tools.send_message(f"🛑 No more eligible vendors with buyer consent (tried: {tried}). "
+                                        "The need stays open.", mentions=[human])
+
+    async def _fallback(self, tools, room_id, human):
+        return await self._next(tools, room_id, human)
+
+    async def _maybe_fallback(self, tools, room_id, human):
+        state = self.rooms.get(room_id)
+        if not state or state[0].status != Status.impasse:
+            return
+        if self.handled_impasse.get(room_id) == state[0].negotiation_id:
+            return
+        self.handled_impasse[room_id] = state[0].negotiation_id
+        return await self._fallback(tools, room_id, human)
 
     def _vendor(self, text: str):
         t = text.lower()
@@ -294,14 +347,20 @@ class CompanyAdapter(SimpleAdapter):
                                  mentions=[BAND_NAMES["coordinator"]])
 
 
+def _configured_agents() -> set:
+    """Company agents that have Band credentials in agent_config.yaml."""
+    import yaml
+    p = CONFIG.parent / "agent_config.yaml"
+    keys = set((yaml.safe_load(p.read_text()) or {}).keys()) if p.exists() else set()
+    return {c for c in COMPANIES if c in keys}
+
+
 async def run(brain: Optional[str] = None):
     brain = brain or os.environ.get("AGENT_BRAIN", "gemini")
-    agents = [
-        Agent.from_config("coordinator", adapter=CoordinatorAdapter()),
-        Agent.from_config("company_a", adapter=CompanyAdapter("company_a", brain)),
-        Agent.from_config("company_b", adapter=CompanyAdapter("company_b", brain)),
-    ]
-    log.info("Starting Deal Coordinator, CloudCo Sales, RetailCorp Procurement (brain=%s)", brain)
+    online = _configured_agents()
+    agents = [Agent.from_config("coordinator", adapter=CoordinatorAdapter(sellers_online=online))]
+    agents += [Agent.from_config(c, adapter=CompanyAdapter(c, brain)) for c in COMPANIES if c in online]
+    log.info("Starting Deal Coordinator + %s (brain=%s)", ", ".join(BAND_NAMES[c] for c in COMPANIES if c in online), brain)
     async with contextlib.AsyncExitStack() as stack:
         running = [await stack.enter_async_context(a) for a in agents]
         await asyncio.gather(*(a.run_forever() for a in running))

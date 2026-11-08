@@ -149,6 +149,13 @@ class Coordinator:
             "type": p.type.value, "terms": p.terms, "rationale": p.rationale, "your_turn": True,
             "rounds_left": self.max_rounds - self.round}))
 
+    def end(self, by: str, reason: str):
+        """A party (or its human) ends the negotiation without a deal."""
+        if self.status != Status.negotiating:
+            raise RuntimeError("negotiation is not open")
+        self._log("walk_away", sender=by)
+        self._set_status(Status.impasse, reason)
+
     # ---------- agreement & contract ----------
     def _agree(self, terms: dict):
         # Both explicit acceptances on identical terms: the sender accepted exactly

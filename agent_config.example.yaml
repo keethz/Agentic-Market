@@ -9,3 +9,7 @@ company_b:
 coordinator:
   agent_id: "<Deal Coordinator agent ID>"
   api_key: "<Deal Coordinator API key>"
+# Optional: fallback seller. Register "RetailIQ Sales" in Band to enable vendor fallback.
+vendor_retailiq:
+  agent_id: "<RetailIQ Sales agent ID>"
+  api_key: "<RetailIQ Sales API key>"

@@ -1,0 +1,18 @@
+# PRIVATE — never put these values into BAND messages.
+company_id: vendor_retailiq
+objectives:
+  - Win retail logos even at a lower price point
+  - Prefer longer contracts
+  - Accept longer payment terms if needed
+terms:
+  unit_price:        {min: 70,  max: 130,   target: 105}
+  quantity:          {min: 250, max: 1500,  target: 600}
+  contract_months:   {min: 12,  max: 36,    target: 24}
+  payment_terms_days: {min: 30,  max: 60,    target: 45}
+  sla_uptime:        {min: 99.5, max: 99.95, target: 99.9}
+  support_tier:      {allowed: [standard, premium]}
+non_negotiable:
+  payment_terms_days: {max: 60}
+approval_rules:
+  - {role: Account Executive}
+  - {role: Sales Director, when: {field: total_value, op: ">", value: 50000}}

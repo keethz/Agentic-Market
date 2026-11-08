@@ -4,6 +4,7 @@
   python run_demo.py --brain gemini  # Gemini agents (needs GOOGLE_API_KEY)
   python run_demo.py --brain claude  # Claude agents (needs ANTHROPIC_API_KEY)
   python run_demo.py --auto-approve  # skip the interactive human approval prompts
+  python run_demo.py --fallback      # buyer walks away from CloudCo -> next-ranked vendor (RetailIQ)
 """
 import argparse
 import json
@@ -38,17 +39,38 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--brain", choices=["scripted", "gemini", "claude"], default="scripted")
     ap.add_argument("--auto-approve", action="store_true")
+    ap.add_argument("--fallback", action="store_true", help="simulate an impasse with the top vendor")
     args = ap.parse_args()
 
-    t, coord, *_ = build(args.brain)
-    coord.start()
-    t.run_until_idle()
-    for m in t.timeline:
-        show(m)
+    if args.fallback:
+        from negotiation.agent import ScriptedBrain
+        from negotiation.config import load_private, load_public
+        from negotiation.fallback import run_with_fallback
+        from negotiation.models import Proposal, ProposalType
+
+        class WalkAway(ScriptedBrain):
+            def decide(self, incoming, feedback=None):
+                return Proposal(type=ProposalType.walk_away, rationale="Not the right fit for us.")
+        quit_ = {"company_a": {"company_b": WalkAway(load_public("company_b"), load_private("company_b"))}}
+        attempts, coord, step = run_with_fallback("need-retailcorp-analytics", brain=args.brain, brains=quit_)
+        for a in attempts:
+            print(f"Attempt with {a.vendor_id}: {a.status} ({a.negotiation_id})")
+        for n in step.notes:
+            print(" ", n)
+        if not coord:
+            return print("No vendor reached agreement.")
+        t = None
+    else:
+        t, coord, *_ = build(args.brain)
+        coord.start()
+        t.run_until_idle()
+        for m in t.timeline:
+            show(m)
 
     print("\nFinal status:", coord.status.value)
-    leaks = scan(t.timeline, load_all())
-    print("Leak scan:", "CLEAN - no secrets in room timeline" if not leaks else leaks)
+    if t:
+        leaks = scan(t.timeline, load_all())
+        print("Leak scan:", "CLEAN - no secrets in room timeline" if not leaks else leaks)
 
     def show_analytics():
         print("\n=== Deal analytics ===\n" + analytics.report(coord.analytics))

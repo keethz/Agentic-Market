@@ -24,5 +24,11 @@ def load_private(company_id: str) -> PrivatePolicy:
     raise FileNotFoundError(company_id)
 
 
-def load_all(ids=("company_a", "company_b")) -> Dict[str, PrivatePolicy]:
-    return {i: load_private(i) for i in ids}
+def load_all(ids=("company_a", "company_b", "vendor_retailiq")) -> Dict[str, PrivatePolicy]:
+    return {i: load_private(i) for i in ids if (CONFIG / "public" / f"{i}.yaml").exists()}
+
+
+def has_agent(company_id: str) -> bool:
+    """A company can negotiate if it has a public profile and private limits."""
+    return (CONFIG / "public" / f"{company_id}.yaml").exists() and any(
+        (CONFIG / f / f"{company_id}.yaml").exists() for f in ("private", "private.example"))
