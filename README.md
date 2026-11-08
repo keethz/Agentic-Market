@@ -160,7 +160,7 @@ Approver roles in the sample configs: `Sales Manager`, `VP Sales` (CloudCo) and
 
 ### Dashboard
 ```bash
-.venv/bin/python dashboard.py          # http://localhost:8050
+.venv/bin/python dashboard.py         
 ```
 A read-only page that refreshes every 5 seconds. It shows totals (negotiations, deals closed, agreement
 rate, average time to agreement and to close, closed value), a per-seller-agent table, time-to-agreement
