@@ -27,7 +27,7 @@ def test_pdf_created_only_when_finalized(tmp_path):
     t = coord.contract.terms
     assert coord.contract.contract_id in text and "FINALIZED" in text
     assert f"{int(t['quantity']):,}" in text and f"Net {t['payment_terms_days']}" in text
-    assert coord.contract.terms_hash in text.replace("\n", "")
+    assert "Integrity" not in text and coord.contract.terms_hash not in text.replace("\n", "")
     for a in coord.contract.approvals:
         assert a.role in text
 

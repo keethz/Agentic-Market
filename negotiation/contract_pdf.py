@@ -42,7 +42,6 @@ def render(contract: Contract, roles: Dict[str, str], out_dir: Path) -> Path:
     seller = next((c for c, r in roles.items() if r == "Seller"), next(iter(names)))
     buyer = next(c for c in names if c != seller)
     t = contract.terms
-    finalized_at = max((a.at or "" for a in contract.approvals), default=contract.created_at)
 
     story = [
         Paragraph("Software Subscription Agreement", ss["Title"]),
@@ -68,10 +67,6 @@ def render(contract: Contract, roles: Dict[str, str], out_dir: Path) -> Path:
               [[names[a.company_id], a.role, a.approver or "", (a.decision or "").upper(), (a.at or "")[:19].replace("T", " ")]
                for a in contract.approvals], style=_GRID),
         Spacer(1, 10),
-        Paragraph("5. Integrity", ss["Heading2"]),
-        Paragraph(f"SHA-256 of agreed terms: <font face='Courier' size='8'>{contract.terms_hash}</font>", s),
-        Paragraph(f"Agreed after {contract.rounds} rounds. Created {contract.created_at[:19]} UTC, "
-                  f"finalized {finalized_at[:19]} UTC.", s),
         Spacer(1, 14),
         Paragraph("Generated automatically by the Deal Coordinator. Contains no confidential negotiation limits.", small),
     ]

@@ -32,7 +32,7 @@ live in a [Band](https://band.ai) room.
 ### Contract PDF
 When **every** required approver has approved, the coordinator renders the final contract to
 `data/contracts/<contract_id>.pdf`. The PDF shows the parties, the agreed terms with the total value,
-the conditions, each approver with their decision and timestamp, and the terms' SHA-256 hash. In Band
+the conditions, and each approver with their decision and timestamp. In Band
 the PDF is uploaded to the room automatically; `@Deal Coordinator contract` sends it again. No PDF is
 made for rejected or partly approved contracts, and it never contains private limits. See
 [samples/sample_contract.pdf](samples/sample_contract.pdf).
